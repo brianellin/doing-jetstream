@@ -1,0 +1,18 @@
+# Local development environment variables
+# Copy this file to .dev.vars and fill in your actual values
+# 
+# Note: .dev.vars is gitignored for security
+
+# Comma-separated list of AT Protocol collections to watch
+# Examples:
+# - blue.2048.*            (all 2048 game collections)
+# - app.bsky.feed.post     (all Bluesky posts)
+# - app.bsky.graph.follow  (all follows)
+JETSTREAM_COLLECTIONS=blue.2048.*,app.bsky.feed.post
+
+# Webhook URL where events will be sent
+WEBHOOK_URL=https://example.com/api/webhooks/jetstream-event
+
+
+# Webhook bearer token for authentication (optional)
+WEBHOOK_BEARER_TOKEN=your-bearer-token-here

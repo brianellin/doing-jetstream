@@ -35,6 +35,16 @@ export class JetstreamProcessor extends DurableObject<Env> {
 	 */
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
+		
+		// Validate required environment variables
+		if (!env.WEBHOOK_URL) {
+			throw new Error("WEBHOOK_URL environment variable is required");
+		}
+		
+		if (!env.JETSTREAM_COLLECTIONS) {
+			throw new Error("JETSTREAM_COLLECTIONS environment variable is required");
+		}
+
 		this.initializeProcessor();
 	}
 
@@ -51,7 +61,10 @@ export class JetstreamProcessor extends DurableObject<Env> {
 
 	private async connectToJetstream() {
 		try {
-			const collections = ["work.doing.*", "blue.2048.*"];
+			// Parse collections from environment variable (comma-separated)
+			const collectionsStr = this.env.JETSTREAM_COLLECTIONS;
+			const collections = collectionsStr.split(",").map(c => c.trim()).filter(c => c.length > 0);
+			
 			const url = new URL("wss://jetstream1.us-west.bsky.network/subscribe");
 			
 			// Add collections to the query
@@ -66,7 +79,9 @@ export class JetstreamProcessor extends DurableObject<Env> {
 				url.searchParams.set("cursor", cursorWithBuffer.toString());
 			}
 
+			console.log("JETSTREAM_COLLECTIONS", this.env.JETSTREAM_COLLECTIONS);
 			console.log(`Connecting to Jetstream: ${url.toString()}`);
+			console.log(`Watching collections: ${collections.join(", ")}`);
 
 			this.websocket = new WebSocket(url.toString());
 
@@ -394,7 +409,7 @@ export default {
 			try {
 				// Cast the unknown message body to our QueueMessage type
 				const queueMessage = message.body as QueueMessage;
-				await sendToWebhook(queueMessage.event);
+				await sendToWebhook(queueMessage.event, env);
 				
 				// Acknowledge successful processing
 				message.ack();
@@ -414,15 +429,23 @@ export default {
 	}
 } satisfies ExportedHandler<Env>;
 
-async function sendToWebhook(event: JetstreamEvent): Promise<void> {
-	const webhookUrl = "https://doingtunnel.doing.work/api/webhooks/jetstream-event";
+async function sendToWebhook(event: JetstreamEvent, env: Env): Promise<void> {
+	const webhookUrl = env.WEBHOOK_URL;
+	const bearerToken = env.WEBHOOK_BEARER_TOKEN;
+	
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+		"User-Agent": "Jetstream-Unified/1.0"
+	};
+	
+	// Add Authorization header if bearer token is available
+	if (bearerToken) {
+		headers["Authorization"] = `Bearer ${bearerToken}`;
+	}
 	
 	const response = await fetch(webhookUrl, {
 		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"User-Agent": "Jetstream-Unified/1.0"
-		},
+		headers,
 		body: JSON.stringify(event),
 	});
 

@@ -42,7 +42,7 @@
 	},
 	"observability": {
 		"enabled": true
-	}
+	},
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
@@ -57,13 +57,17 @@
 	 */
 
 	/**
-	 * Environment Variables
+	 * Environment Variables and Secrets
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+	 * 
+	 * Note: WEBHOOK_URL and JETSTREAM_COLLECTIONS are now configured via:
+	 * - Production: wrangler secret put or environment variables  
+	 * - Development: .dev.vars file
 	 */
-	// "vars": { "MY_VARIABLE": "production_value" },
+
 	/**
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
+	 * Note: Secrets are set via CLI and not stored in this file
+	 * Set secrets with: wrangler secret put WEBHOOK_BEARER_TOKEN
 	 */
 
 	/**
