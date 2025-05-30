@@ -23,6 +23,23 @@
 			}
 		]
 	},
+	"queues": {
+		"producers": [
+			{
+				"queue": "jetstream-events",
+				"binding": "JETSTREAM_QUEUE"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "jetstream-events",
+				"max_batch_size": 10,
+				"max_batch_timeout": 5,
+				"max_retries": 3,
+				"dead_letter_queue": "jetstream-events-dlq"
+			}
+		]
+	},
 	"observability": {
 		"enabled": true
 	}

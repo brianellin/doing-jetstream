@@ -1,4 +1,5 @@
 import { DurableObject } from "cloudflare:workers";
+import type { JetstreamEvent, StoredStats, QueueMessage } from "./types";
 
 /**
  * Welcome to Cloudflare Workers! This is your first Durable Objects application.
@@ -12,40 +13,6 @@ import { DurableObject } from "cloudflare:workers";
  *
  * Learn more at https://developers.cloudflare.com/durable-objects
  */
-
-interface JetstreamEvent {
-	did: string;
-	time_us: number;
-	kind: "commit" | "identity" | "account";
-	commit?: {
-		rev: string;
-		operation: "create" | "update" | "delete";
-		collection: string;
-		rkey: string;
-		record?: any;
-		cid?: string;
-	};
-	identity?: {
-		did: string;
-		handle: string;
-		seq: number;
-		time: string;
-	};
-	account?: {
-		active: boolean;
-		did: string;
-		seq: number;
-		time: string;
-	};
-}
-
-interface StoredStats {
-	cursor: number;
-	eventCounts: Record<string, number>;
-	totalEvents: number;
-	totalReceived: number;
-	lastEventTime: string;
-}
 
 /** Durable Object for managing Jetstream connection and event processing */
 export class JetstreamProcessor extends DurableObject<Env> {
@@ -177,21 +144,21 @@ export class JetstreamProcessor extends DurableObject<Env> {
 			console.log(`Processing ${event.commit.operation} event for collection: ${collection}`);
 		}
 
-		// Post to webhook - send the complete event with all commit details
+		// Send to Cloudflare Queue instead of webhook
 		try {
-			const response = await fetch("https://doingtunnel.doing.work/api/webhooks/jetstream-event", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(event),
-			});
+			const queueMessage: QueueMessage = {
+				event: event,
+				queuedAt: new Date().toISOString(),
+				retryCount: 0
+			};
 
-			if (!response.ok) {
-				console.error(`Webhook request failed: ${response.status} ${response.statusText}`);
-			}
+			await this.env.JETSTREAM_QUEUE.send(queueMessage);
+
+			console.log(`Event queued successfully: ${event.time_us}`);
 		} catch (error) {
-			console.error("Error posting to webhook:", error);
+			console.error("Error sending to queue:", error);
+			// Note: Queue failures are more serious than webhook failures
+			// You might want to implement additional error handling here
 		}
 
 		// Persist stats every 100 events to avoid too frequent writes
@@ -392,13 +359,24 @@ export default {
 			});
 		}
 
+		if (url.pathname === "/health") {
+			return new Response(JSON.stringify({
+				status: "healthy",
+				worker: "jetstream-unified",
+				timestamp: new Date().toISOString()
+			}), {
+				headers: { "Content-Type": "application/json" }
+			});
+		}
+
 		// Default route - show basic info
 		return new Response(JSON.stringify({
-			message: "Jetstream Event Processor",
+			message: "Jetstream Event Processor (Unified)",
 			endpoints: {
 				"/stats": "Get processing statistics (JSON)",
 				"/stats/html": "Get processing statistics (HTML dashboard)",
 				"/status": "Get WebSocket connection status",
+				"/health": "Health check endpoint",
 				"POST /reset": "Reset statistics",
 				"POST /reconnect": "Force WebSocket reconnection"
 			}
@@ -406,4 +384,50 @@ export default {
 			headers: { "Content-Type": "application/json" }
 		});
 	},
+
+	// Queue consumer handler - processes events from the queue
+	async queue(batch: MessageBatch, env: Env, ctx: ExecutionContext): Promise<void> {
+		console.log(`Processing batch of ${batch.messages.length} messages`);
+
+		// Process messages in batch for efficiency
+		const webhookPromises = batch.messages.map(async (message) => {
+			try {
+				// Cast the unknown message body to our QueueMessage type
+				const queueMessage = message.body as QueueMessage;
+				await sendToWebhook(queueMessage.event);
+				
+				// Acknowledge successful processing
+				message.ack();
+				
+				console.log(`Successfully processed event ${queueMessage.event.time_us} for collection: ${queueMessage.event.commit?.collection || 'non-commit'}`);
+			} catch (error) {
+				console.error(`Failed to process queue message:`, error);
+				
+				// Let the message retry (don't ack)
+				// Cloudflare Queues will automatically retry based on configuration
+				message.retry();
+			}
+		});
+
+		// Wait for all webhook calls to complete
+		await Promise.allSettled(webhookPromises);
+	}
 } satisfies ExportedHandler<Env>;
+
+async function sendToWebhook(event: JetstreamEvent): Promise<void> {
+	const webhookUrl = "https://doingtunnel.doing.work/api/webhooks/jetstream-event";
+	
+	const response = await fetch(webhookUrl, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"User-Agent": "Jetstream-Unified/1.0"
+		},
+		body: JSON.stringify(event),
+	});
+
+	if (!response.ok) {
+		// This will cause the message to retry
+		throw new Error(`Webhook request failed: ${response.status} ${response.statusText}`);
+	}
+}

@@ -1,17 +1,19 @@
 # Jetstream Event Processor
 
-A Cloudflare Worker with Durable Objects that connects to the Bluesky Jetstream to process AT Protocol events and forward them to a webhook endpoint.
+A Cloudflare Worker with Durable Objects that connects to the Bluesky Jetstream to process AT Protocol events and forward them to a webhook endpoint via Cloudflare Queues.
 
 ## Features
 
 - **Real-time Event Processing**: Connects to Bluesky Jetstream WebSocket to receive live AT Protocol events
 - **Filtered Collections**: Subscribes specifically to `work.doing.*` and `blue.2048.*` collections
-- **Webhook Integration**: Forwards each event to `https://doingtunnel.doing.work/api/webhooks/jetstream-event`
+- **Queue-based Architecture**: Uses Cloudflare Queues for reliable event processing
+- **Webhook Integration**: Dedicated consumer worker forwards events to webhook endpoint
 - **Cursor Tracking**: Maintains cursor position for gapless playback during reconnections
 - **Statistics Collection**: Tracks event counts per collection and total processing stats
 - **Web Dashboard**: Beautiful HTML interface to view processing statistics
 - **Auto-Reconnection**: Handles WebSocket disconnections with exponential backoff
 - **Persistent Storage**: Uses Durable Object storage to maintain state across deployments
+- **Shared Types**: Common TypeScript interfaces for consistency across workers
 
 ## Endpoints
 
