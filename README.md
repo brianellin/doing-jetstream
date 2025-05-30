@@ -2,6 +2,8 @@
 
 A Cloudflare Worker with Durable Objects that connects to the Bluesky Jetstream to process AT Protocol events and forward them to a webhook endpoint via Cloudflare Queues.
 
+Why might this be useful? This is an experimental setup for small atproto apps that running on serverless systems that still want to "subscribe" to realtime events from the firehose/jetstream, but may not want to run their own server and are expecting low volumes traffic. 
+
 ## Features
 
 - **Real-time Event Processing**: Connects to Bluesky Jetstream WebSocket to receive live AT Protocol events
